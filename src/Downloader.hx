@@ -2,6 +2,7 @@ import hant.Log;
 import haxe.io.Path;
 import sys.FileSystem;
 import sys.io.File;
+import tink.Url;
 import tjson.TJSON;
 using stdlib.StringTools;
 using stdlib.Lambda;
@@ -35,7 +36,9 @@ class Downloader
 		this.nextListUrlRegex = new EReg(nextListUrlRegex, "");
 		this.productUrlRegex = new EReg(productUrlRegex, "");
 		this.productTextProperties = productTextProperties.map(function(s) { var ss = s.split(":"); return { name:ss[0], re:selectorToRegex(ss.slice(1).join(":")) }; });
-		this.productFileProperties = productFileProperties.map(function(s) { var ss = s.split(":"); return { name:ss[0], re:selectorToRegex(ss.slice(1).join(":")) }; });
+		this.productFileProperties = productFileProperties.map(function(s) { var ss = s.split(":"); return { name:ss[0], re:selectorToRegex(ss.slice(1).join(":")) }; } );
+		
+		Sys.println("");
 	}
 	
 	public function run()
@@ -61,7 +64,7 @@ class Downloader
 				processedLists.push(url);
 				
 				Log.start("Process list page: " + url);
-				processList(url, HttpTools.get(url));
+				processList(url);
 				Log.finishSuccess();
 			}
 		}
@@ -71,7 +74,7 @@ class Downloader
 	{
 		var text = HttpTools.get(baseUrl);
 		
-		for (url in getUrlsFromText(text, productUrlRegex))
+		for (url in getUrlsFromText(text, baseUrl, productUrlRegex))
 		{
 			if (processedProducts.indexOf(url) < 0 && toProcessProducts.indexOf(url) < 0)
 			{
@@ -80,11 +83,11 @@ class Downloader
 			}
 		}
 		
-		for (url in getUrlsFromText(text, nextListUrlRegex))
+		for (url in getUrlsFromText(text, baseUrl, nextListUrlRegex))
 		{
 			if (processedLists.indexOf(url) < 0 && toProcessLists.indexOf(url) < 0)
 			{
-				toProcessLists.push(url));
+				toProcessLists.push(url);
 				Log.echo("Found link to list page: " + url);
 			}
 		}
@@ -96,7 +99,9 @@ class Downloader
 		
 		for (property in productTextProperties)
 		{
-			Reflect.setField(r, property.name, getPropertyFromText(text, property.re));
+			var value = getPropertyFromText(text, property.re);
+			Reflect.setField(r, property.name, value);
+			if (value != null) Log.echo("Found property: " + property.name + " = " + value);
 		}
 		
 		return r;
@@ -109,7 +114,7 @@ class Downloader
 		{
 			FileSystem.createDirectory(dir);
 		}
-		File.saveContent(jsonFilePath, TJSON.encode(data));
+		File.saveContent(jsonFilePath, TJSON.encode(data, "fancy"));
 	}
 	
 	function getUrlsFromText(text:String, baseUrl:String, re:EReg) : Array<String>
@@ -130,15 +135,13 @@ class Downloader
 	
 	function makeUrlAbsolute(baseUrl:String, url:String) : String
 	{
-		
+		var bu = Url.parse(baseUrl);
+		return bu.resolve(url);
 	}
 	
 	function getPropertyFromText(text:String, re:EReg) : String
 	{
-		var r = [];
-		
-		var pos = 0;
-		while (re.matchSub(text, pos))
+		if (re.match(text))
 		{
 			var property : String = null;
 			for (i in 1...10)
@@ -147,18 +150,16 @@ class Downloader
 				if (!property.isEmpty()) break;
 			}
 			if (property.isEmpty()) try property = re.matched(0) catch (_:Dynamic) {}
-			
-			r.push(property);
-			var p = re.matchedPos();
-			pos = p.pos + p.len;
+			return property;
 		}
 		
-		return r.join("\n\n");
+		return null;
 	}
 	
 	function urlToFile(url:String) : String
 	{
-		return ~/[?()=*_]/g.map(url, function(re)
+		var parts = Url.parse(url);
+		return parts.host + "/" + ~/[?()=*\/_]/g.map(parts.path.ltrim("/") + (parts.query != null ? "?" + parts.query : ""), function(re)
 		{
 			return switch (re.matched(0))
 			{
@@ -167,6 +168,7 @@ class Downloader
 				case ")": "_B_";
 				case "=": "_E_";
 				case "*": "_S_";
+				case "/": "_D_";
 				case "_": "___";
 				case _: re.matched(0);
 			}
@@ -179,6 +181,12 @@ class Downloader
 		
 		var nodeSelector = selectors[0];
 		var attrSelector = selectors.length > 1 ? selectors[1] : "";
+		
+		nodeSelector = ~/\b([a-zA-Z0-9_-]+)\[(\d+)\]/g.map(nodeSelector, function(re)
+		{
+			var s = []; for (i in 0...Std.parseInt(re.matched(2))) s.push(re.matched(1));
+			return s.join(">");
+		});
 		
 		var parts = nodeSelector.split(">");
 		var last = parts[parts.length - 1];

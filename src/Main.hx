@@ -1,5 +1,4 @@
 import hant.CmdOptions;
-import neko.Web;
 
 class Main
 {
