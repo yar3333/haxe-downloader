@@ -7,11 +7,18 @@ class Main
 		var args = Sys.args();
 		
 		var options = new CmdOptions();
-		options.add("startListUrl", "", "Starting url to download and parse to find other links.");
-		options.add("nextListUrlRegex", "", "Regex to find additional URLs to download and parse to find other links.");
-		options.add("productUrlRegex", "", "Regex to find URLs to product pages.");
-		options.addRepeatable("productTextProperty", String, [ "--product-text-property" ], "Text-type property name and selector to find element with a property value in 'name:selector' format.");
-		options.addRepeatable("productFileProperty", String, [ "--product-file-property" ], "File-type property name and selector to find element with a property value in 'name:selector' format.");
+		
+		options.add("outDir", "result", [ "--output-directory" ], "Destination directory to store parsed data and downloaded files. Default is 'result'.");
+		options.add("cacheDir", "cache", [ "--cache-directory" ], "Destination directory to store cache files. Default is 'cache'.");
+		
+		options.addRepeatable("listUrls",              String, [ "--list-url" ],              "URL to download and parse to find other links.");
+		options.addRepeatable("listUrls",              String, [ "--list-url" ],              "URL to download and parse to find other links.");
+		options.addRepeatable("listRegexes",           String, [ "--list-regex" ],            "Regex to find additional URLs to download and parse to find other links.");
+		options.addRepeatable("productUrls",           String, [ "--product-url" ],           "Manually specified URL to download and parse product.");
+		options.addRepeatable("productRegexes",        String, [ "--product-regex" ],         "Regex to find URLs to product pages.");
+		options.addRepeatable("productTextProperties", String, [ "--product-text-property" ], "Text-type property in 'name:css_selector[:regex_to_postprocess]' format.");
+		options.addRepeatable("productHtmlProperties", String, [ "--product-html-property" ], "HTML-type property in 'name:css_selector[:regex_to_postprocess]' format.");
+		options.addRepeatable("productFileProperties", String, [ "--product-file-property" ], "File-type property in 'name:css_selector[:regex_to_postprocess]' format.");
 		
 		if (args.length == 0)
 		{
@@ -23,20 +30,29 @@ class Main
 			options.parse(args);
 			
 			Sys.println("");
-			Sys.println("startListUrl = " + options.get("startListUrl"));
-			Sys.println("nextListUrlRegex = " + options.get("nextListUrlRegex"));
-			Sys.println("productUrlRegex = " + options.get("productUrlRegex"));
-			Sys.println("productTextProperty =\n\t" + options.get("productTextProperty").join("\n\t"));
-			Sys.println("productFileProperty =\n\t" + options.get("productFileProperty").join("\n\t"));
+			Sys.println("listUrls =\n\t" + options.get("listUrls").join("\n\t"));
+			Sys.println("listRegexes =\n\t" + options.get("listRegexes").join("\n\t"));
+			Sys.println("productUrls =\n\t" + options.get("productUrls").join("\n\t"));
+			Sys.println("productRegexes =\n\t" + options.get("productRegexes").join("\n\t"));
+			Sys.println("productTextProperties =\n\t" + options.get("productTextProperties").join("\n\t"));
+			Sys.println("productHtmlProperties =\n\t" + options.get("productHtmlProperties").join("\n\t"));
+			Sys.println("productFileProperties =\n\t" + options.get("productFileProperties").join("\n\t"));
 			Sys.println("");
 			
 			var downloader = new Downloader
 			(
-				options.get("startListUrl"),
-				options.get("nextListUrlRegex"),
-				options.get("productUrlRegex"),
-				options.get("productTextProperty"),
-				options.get("productFileProperty")
+				options.get("outDir"),
+				options.get("cacheDir"),
+				
+				options.get("listUrls"),
+				options.get("listRegexes"),
+				
+				options.get("productUrls"),
+				options.get("productRegexes"),
+				
+				options.get("productTextProperties"),
+				options.get("productHtmlProperties"),
+				options.get("productFileProperties")
 			);
 			
 			downloader.run();

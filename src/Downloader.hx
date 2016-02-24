@@ -1,81 +1,93 @@
 import hant.Log;
 import haxe.io.Path;
 import htmlparser.HtmlDocument;
+import stdlib.Regex;
 import sys.FileSystem;
 import sys.io.File;
 import tink.Url;
 import tjson.TJSON;
+import htmlparser.HtmlNodeElement;
 using stdlib.StringTools;
 using stdlib.Lambda;
 
 class Downloader
 {
-	var reAttrValue = "(?:'([^']*)'|\"([^\"]*)\"|([-_a-z0-9]+))";
+	var outDir : String;
+	var cacheDir : String;
 	
-	var startListUrl : String;
-	var nextListUrlRegex : EReg;
-	var productUrlRegex : EReg;
-	var productTextProperties : Array<{ name:String, selector:String }>;
-	var productFileProperties : Array<{ name:String, selector:String }>;
+	var listRegexes : Array<EReg>;
+	var productRegexes : Array<EReg>;
+	
+	var productTextProperties : Array<{ name:String, selector:String, postRE:Regex }>;
+	var productHtmlProperties : Array<{ name:String, selector:String, postRE:Regex }>;
+	var productFileProperties : Array<{ name:String, selector:String, postRE:Regex }>;
 	
 	var processedLists = [];
-	var toProcessLists = [];
+	var toProcessLists : Array<String>;
 	
 	var processedProducts = [];
-	var toProcessProducts = [];
+	var toProcessProducts : Array<String>;
 	
 	public function new
 	(
-		startListUrl:String,
-		nextListUrlRegex:String,
-		productUrlRegex:String,
+		outDir:String,
+		cacheDir:String,
+		
+		listUrls:Array<String>,
+		listRegexes:Array<String>,
+		
+		productUrls:Array<String>,
+		productRegexes:Array<String>,
+		
 		productTextProperties:Array<String>,
+		productHtmlProperties:Array<String>,
 		productFileProperties:Array<String>
 	)
 	{
-		this.startListUrl = startListUrl;
-		this.nextListUrlRegex = new EReg(nextListUrlRegex, "");
-		this.productUrlRegex = new EReg(productUrlRegex, "");
-		this.productTextProperties = productTextProperties.map(function(s) { var ss = s.split(":"); return { name:ss[0], selector:ss.slice(1).join(":") }; });
-		this.productFileProperties = productFileProperties.map(function(s) { var ss = s.split(":"); return { name:ss[0], selector:ss.slice(1).join(":") }; });
+		this.outDir = Path.removeTrailingSlashes(outDir);
+		this.cacheDir = Path.removeTrailingSlashes(cacheDir);
+		
+		this.toProcessLists = listUrls.copy();
+		this.listRegexes = listRegexes.map(function(s) return new EReg(s, ""));
+		
+		this.toProcessProducts = productUrls.copy();
+		this.productRegexes = productRegexes.map(function(s) return new EReg(s, ""));
+		
+		this.productTextProperties = productTextProperties.map(parseNameAndSelector);
+		this.productHtmlProperties = productHtmlProperties.map(parseNameAndSelector);
+		this.productFileProperties = productFileProperties.map(parseNameAndSelector);
 		
 		Sys.println("");
 	}
 	
 	public function run()
 	{
-		toProcessLists.push(startListUrl);
-		
 		while (toProcessProducts.length > 0 || toProcessLists.length > 0)
 		{
 			while (toProcessProducts.length > 0)
 			{
 				var url = toProcessProducts.shift();
 				processedProducts.push(url);
-				
-				Log.start("Process product page: " + url);
-				var data = parseProduct(HttpTools.get(url));
-				saveProduct(urlToFile(url) + "/data.config", data);
-				Log.finishSuccess();
+				processProduct(url);
 			}
 			
 			while (toProcessLists.length > 0)
 			{
 				var url = toProcessLists.shift();
 				processedLists.push(url);
-				
-				Log.start("Process list page: " + url);
 				processList(url);
-				Log.finishSuccess();
+				
 			}
 		}
 	}
 	
 	function processList(baseUrl:String)
 	{
-		var text = HttpTools.get(baseUrl);
+		Log.start("Process list page: " + baseUrl);
 		
-		for (url in getUrlsFromText(text, baseUrl, productUrlRegex))
+		var text = getTextToParse(baseUrl);
+		
+		for (url in getUrlsFromText(text, baseUrl, productRegexes))
 		{
 			if (processedProducts.indexOf(url) < 0 && toProcessProducts.indexOf(url) < 0)
 			{
@@ -84,7 +96,7 @@ class Downloader
 			}
 		}
 		
-		for (url in getUrlsFromText(text, baseUrl, nextListUrlRegex))
+		for (url in getUrlsFromText(text, baseUrl, listRegexes))
 		{
 			if (processedLists.indexOf(url) < 0 && toProcessLists.indexOf(url) < 0)
 			{
@@ -92,45 +104,51 @@ class Downloader
 				Log.echo("Found link to list page: " + url);
 			}
 		}
+		
+		Log.finishSuccess();
 	}
 	
-	function parseProduct(text:String) : Dynamic
+	function processProduct(url:String)
 	{
-		var r : Dynamic = {};
+		Log.start("Process product page: " + url);
 		
-		var doc = new HtmlDocument(text, true);
+		var doc = new HtmlDocument(getTextToParse(url), true);
+		
+		var data : Dynamic = {};
 		
 		for (property in productTextProperties)
 		{
-			var value = getPropertyFromHtml(doc, property.selector);
-			Reflect.setField(r, property.name, value);
-			if (value != null) Log.echo("Found property: " + property.name + " = " + value);
+			var value = getPropertyFromHtml(doc, property.selector, property.postRE, function(node) return node.innerText.trim());
+			Reflect.setField(data, property.name, value);
+			//if (value != null) Log.echo("Found property: " + property.name + " = " + value);
 		}
 		
-		return r;
-	}
-	
-	function saveProduct(jsonFilePath:String, data:Dynamic)
-	{
-		var dir = Path.directory(jsonFilePath);
-		if (dir != null && dir != "" && !FileSystem.exists(dir))
+		for (property in productHtmlProperties)
 		{
-			FileSystem.createDirectory(dir);
+			var value = getPropertyFromHtml(doc, property.selector, property.postRE, function(node) return node.innerHTML.trim());
+			Reflect.setField(data, property.name, value);
+			//if (value != null) Log.echo("Found property: " + property.name + " = " + value);
 		}
-		File.saveContent(jsonFilePath, TJSON.encode(data, "fancy"));
+		
+		saveToFile(outDir + "/" + urlToFile(url) + "/data.config", TJSON.encode(data, "fancy"));
+		
+		Log.finishSuccess();
 	}
 	
-	function getUrlsFromText(text:String, baseUrl:String, re:EReg) : Array<String>
+	function getUrlsFromText(text:String, baseUrl:String, regexes:Array<EReg>) : Array<String>
 	{
 		var r = [];
 		
-		var pos = 0;
-		while (re.matchSub(text, pos))
+		for (re in regexes)
 		{
-			var url = re.matched(0);
-			r.push(url);
-			var p = re.matchedPos();
-			pos = p.pos + p.len;
+			var pos = 0;
+			while (re.matchSub(text, pos))
+			{
+				var url = re.matched(0);
+				r.push(url);
+				var p = re.matchedPos();
+				pos = p.pos + p.len;
+			}
 		}
 		
 		return r.map.fn(makeUrlAbsolute(baseUrl, _));
@@ -142,7 +160,7 @@ class Downloader
 		return bu.resolve(url);
 	}
 	
-	function getPropertyFromHtml(doc:HtmlDocument, selector:String) : String
+	function getPropertyFromHtml(doc:HtmlDocument, selector:String, postRE:Regex, getValueFromNode:HtmlNodeElement->String) : String
 	{
 		var r = [];
 		
@@ -153,7 +171,10 @@ class Downloader
 		
 		for (node in doc.find(nodeSelector))
 		{
-			var v = attrSelector == "" ? node.innerHTML : node.getAttribute(attrSelector);
+			var v = attrSelector == "" ? getValueFromNode(node) : node.getAttribute(attrSelector);
+			if (v == null) v = "";
+			if (postRE != null) v = postRE.replace(v);
+			
 			r.push(v != null ? v : "");
 		}
 		
@@ -168,14 +189,48 @@ class Downloader
 			return switch (re.matched(0))
 			{
 				case "?": "_Q_";
-				case "(": "_A_";
-				case ")": "_B_";
-				case "=": "_E_";
 				case "*": "_S_";
 				case "/": "_D_";
 				case "_": "___";
 				case _: re.matched(0);
 			}
 		});
+	}
+	
+	function parseNameAndSelector(s:String)
+	{
+		var ss = s.split(":");
+		return
+		{
+			name:     ss[0],
+			selector: ss.slice(1, ss.length > 2 ? ss.length - 1 : ss.length).join(":"),
+			postRE:   ss.length > 2 ? new Regex(ss[ss.length - 1]) : null
+		}
+	}
+	
+	function getTextToParse(url:String) : String
+	{
+		var cacheFile = cacheDir + "/" + urlToFile(url);
+		
+		if (FileSystem.exists(cacheFile))
+		{
+			return File.getContent(cacheFile);
+		}
+		else
+		{
+			var text = HttpTools.get(url);
+			saveToFile(cacheFile, text);
+			return text;
+		}
+	}
+	
+	function saveToFile(file:String, text:String)
+	{
+		var dir = Path.directory(file);
+		if (dir != null && dir != "" && !FileSystem.exists(dir))
+		{
+			FileSystem.createDirectory(dir);
+		}
+		File.saveContent(file, text);
 	}
 }
