@@ -26,8 +26,8 @@ class Main
 			Sys.println("startListUrl = " + options.get("startListUrl"));
 			Sys.println("nextListUrlRegex = " + options.get("nextListUrlRegex"));
 			Sys.println("productUrlRegex = " + options.get("productUrlRegex"));
-			Sys.println("productTextProperty = " + options.get("productTextProperty"));
-			Sys.println("productFileProperty = " + options.get("productFileProperty"));
+			Sys.println("productTextProperty =\n\t" + options.get("productTextProperty").join("\n\t"));
+			Sys.println("productFileProperty =\n\t" + options.get("productFileProperty").join("\n\t"));
 			Sys.println("");
 			
 			var downloader = new Downloader

@@ -1,5 +1,6 @@
 import hant.Log;
 import haxe.io.Path;
+import htmlparser.HtmlDocument;
 import sys.FileSystem;
 import sys.io.File;
 import tink.Url;
@@ -14,8 +15,8 @@ class Downloader
 	var startListUrl : String;
 	var nextListUrlRegex : EReg;
 	var productUrlRegex : EReg;
-	var productTextProperties : Array<{ name:String, re:EReg }>;
-	var productFileProperties : Array<{ name:String, re:EReg }>;
+	var productTextProperties : Array<{ name:String, selector:String }>;
+	var productFileProperties : Array<{ name:String, selector:String }>;
 	
 	var processedLists = [];
 	var toProcessLists = [];
@@ -35,8 +36,8 @@ class Downloader
 		this.startListUrl = startListUrl;
 		this.nextListUrlRegex = new EReg(nextListUrlRegex, "");
 		this.productUrlRegex = new EReg(productUrlRegex, "");
-		this.productTextProperties = productTextProperties.map(function(s) { var ss = s.split(":"); return { name:ss[0], re:selectorToRegex(ss.slice(1).join(":")) }; });
-		this.productFileProperties = productFileProperties.map(function(s) { var ss = s.split(":"); return { name:ss[0], re:selectorToRegex(ss.slice(1).join(":")) }; } );
+		this.productTextProperties = productTextProperties.map(function(s) { var ss = s.split(":"); return { name:ss[0], selector:ss.slice(1).join(":") }; });
+		this.productFileProperties = productFileProperties.map(function(s) { var ss = s.split(":"); return { name:ss[0], selector:ss.slice(1).join(":") }; });
 		
 		Sys.println("");
 	}
@@ -97,9 +98,11 @@ class Downloader
 	{
 		var r : Dynamic = {};
 		
+		var doc = new HtmlDocument(text, true);
+		
 		for (property in productTextProperties)
 		{
-			var value = getPropertyFromText(text, property.re);
+			var value = getPropertyFromHtml(doc, property.selector);
 			Reflect.setField(r, property.name, value);
 			if (value != null) Log.echo("Found property: " + property.name + " = " + value);
 		}
@@ -139,21 +142,22 @@ class Downloader
 		return bu.resolve(url);
 	}
 	
-	function getPropertyFromText(text:String, re:EReg) : String
+	function getPropertyFromHtml(doc:HtmlDocument, selector:String) : String
 	{
-		if (re.match(text))
+		var r = [];
+		
+		var selectors = selector.split("@");
+		
+		var nodeSelector = selectors[0];
+		var attrSelector = selectors.length > 1 ? selectors[1] : "";
+		
+		for (node in doc.find(nodeSelector))
 		{
-			var property : String = null;
-			for (i in 1...10)
-			{
-				try property = re.matched(i) catch (_:Dynamic) {}
-				if (!property.isEmpty()) break;
-			}
-			if (property.isEmpty()) try property = re.matched(0) catch (_:Dynamic) {}
-			return property;
+			var v = attrSelector == "" ? node.innerHTML : node.getAttribute(attrSelector);
+			r.push(v != null ? v : "");
 		}
 		
-		return null;
+		return r.length != 0 ? r.join("\n") : null;
 	}
 	
 	function urlToFile(url:String) : String
@@ -173,30 +177,5 @@ class Downloader
 				case _: re.matched(0);
 			}
 		});
-	}
-	
-	function selectorToRegex(selector:String) : EReg
-	{
-		var selectors = selector.split("@");
-		
-		var nodeSelector = selectors[0];
-		var attrSelector = selectors.length > 1 ? selectors[1] : "";
-		
-		nodeSelector = ~/\b([a-zA-Z0-9_-]+)\[(\d+)\]/g.map(nodeSelector, function(re)
-		{
-			var s = []; for (i in 0...Std.parseInt(re.matched(2))) s.push(re.matched(1));
-			return s.join(">");
-		});
-		
-		var parts = nodeSelector.split(">");
-		var last = parts[parts.length - 1];
-		
-		var r = attrSelector == ""
-				? parts.map.fn("[<]" + _ + "[^>]*?[>]").join(".*?") + "(.*?)[<][/]" + last + "[>]"
-				: parts.slice(0, parts.length - 1).map.fn("[<]" + _).join("[^>]*?[>].*?") + "\\s+.*?" + attrSelector + "\\s*[=]\\s*" + reAttrValue;
-		
-		Log.echo("selectorToRegex: " + selector + " => " + r);
-		
-		return new EReg(r, "s");
 	}
 }
