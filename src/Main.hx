@@ -10,8 +10,8 @@ class Main
 		
 		options.add("outDir", "result", [ "--output-directory" ], "Destination directory to store parsed data and downloaded files. Default is 'result'.");
 		options.add("cacheDir", "cache", [ "--cache-directory" ], "Destination directory to store cache files. Default is 'cache'.");
+		options.add("outJsonFile", "", [ "--output-json-file" ], "Specify path to output JSON file if you want it.");
 		
-		options.addRepeatable("listUrls",              String, [ "--list-url" ],              "URL to download and parse to find other links.");
 		options.addRepeatable("listUrls",              String, [ "--list-url" ],              "URL to download and parse to find other links.");
 		options.addRepeatable("listRegexes",           String, [ "--list-regex" ],            "Regex to find additional URLs to download and parse to find other links.");
 		options.addRepeatable("productUrls",           String, [ "--product-url" ],           "Manually specified URL to download and parse product.");
@@ -43,6 +43,7 @@ class Main
 			(
 				options.get("outDir"),
 				options.get("cacheDir"),
+				options.get("outJsonFile"),
 				
 				options.get("listUrls"),
 				options.get("listRegexes"),

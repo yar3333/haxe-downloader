@@ -14,6 +14,7 @@ class Downloader
 {
 	var outDir : String;
 	var cacheDir : String;
+	var outJsonFile : String;
 	
 	var listRegexes : Array<EReg>;
 	var productRegexes : Array<EReg>;
@@ -28,10 +29,13 @@ class Downloader
 	var processedProducts = [];
 	var toProcessProducts : Array<String>;
 	
+	var outJsonData = [];
+	
 	public function new
 	(
 		outDir:String,
 		cacheDir:String,
+		outJsonFile:String,
 		
 		listUrls:Array<String>,
 		listRegexes:Array<String>,
@@ -46,6 +50,7 @@ class Downloader
 	{
 		this.outDir = Path.removeTrailingSlashes(outDir);
 		this.cacheDir = Path.removeTrailingSlashes(cacheDir);
+		this.outJsonFile = outJsonFile;
 		
 		this.toProcessLists = listUrls.copy();
 		this.listRegexes = listRegexes.map(function(s) return new EReg(s, ""));
@@ -78,6 +83,11 @@ class Downloader
 				processList(url);
 				
 			}
+		}
+		
+		if (outJsonFile != null && outJsonFile != "")
+		{
+			saveToFile(outJsonFile, TJSON.encode(outJsonData, "fancy"));
 		}
 	}
 	
@@ -131,6 +141,8 @@ class Downloader
 		}
 		
 		saveToFile(outDir + "/" + urlToFile(url) + "/data.config", TJSON.encode(data, "fancy"));
+		
+		outJsonData.push(data);
 		
 		Log.finishSuccess();
 	}
