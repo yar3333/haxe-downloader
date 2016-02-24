@@ -1,10 +1,27 @@
 import hant.CmdOptions;
+import hant.Path;
+import haxe.CallStack;
+import neko.Lib;
 
 class Main
 {
     static function main()
     {
-		var args = Sys.args();
+        var args = Sys.args();
+		
+		var exeDir = Path.normalize(Sys.getCwd());
+		if (args.length > 0)
+		{
+			var dir = args.pop();
+			try
+			{
+				Sys.setCwd(dir);
+			}
+			catch (e:Dynamic)
+			{
+				fail("Error: could not change dir to '" + dir + "'.");
+			}
+		}
 		
 		var options = new CmdOptions();
 		
@@ -22,8 +39,22 @@ class Main
 		
 		if (args.length == 0)
 		{
-			Sys.println("downloader arguments:");
+			Sys.println("Downloader is a tool to download and parse sites into JSON file.");
+			Sys.println("Usage: haxelib run downloader <args>");
+			Sys.println("where <args> may be:");
+			Sys.println("");
 			Sys.println(options.getHelpMessage());
+			Sys.println("");
+			Sys.println("Example:");
+			Sys.println("");
+			Sys.println("\thaxelib run downloader");
+			Sys.println("\t\t--output-json-file bin/php/data.json \\");
+			Sys.println("\t\t--list-url \"http://php.net/manual/en/ref.array.php\" \\");
+			Sys.println("\t\t--product-regex \"function[.][a-zA-Z0-9_-]+[.]php\" \\");
+			Sys.println("\t\t--product-text-property \"name:h1\" \\");
+			Sys.println("\t\t--product-text-property \"prototype:div.methodsynopsis.dc-description:/[\\t\\r\\n ]+/ /\" \\");
+			Sys.println("\t\t--product-html-property \"parameters:div.refsect1.parameters>p>dl:/[\\t\\r\\n ]+/ /\" \\");
+			Sys.println("\t\t--product-text-property \"return:div.refsect1.returnvalues>p:/[\\t\\r\\n ]+/ /\"");
 		}
 		else
 		{
@@ -61,4 +92,11 @@ class Main
 		
 		return 0;
     }
+	
+	static function fail(message:String)
+	{
+		Lib.println("ERROR: " + message);
+		Lib.println(CallStack.toString(CallStack.callStack()));
+		Sys.exit(1);
+	}
 }

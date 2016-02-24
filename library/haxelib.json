@@ -1,0 +1,11 @@
+{
+  "name": "downloader",
+  "license": "LGPL",
+  "tags": ["download","parse","html","json","utility"],
+  "description": "Utility to download and parse sites into JSON files.",
+  "contributors": ["yar3333"],
+  "releasenote": "Init.",
+  "version": "1.0.0",
+  "url": "https://bitbucket.org/yar3333/haxe-downloader",
+  "dependencies": {}
+}
