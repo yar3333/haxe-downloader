@@ -31,7 +31,6 @@
     <library name="stdlib" />
     <library name="hant" />
     <library name="tjson" />
-    <library name="slambda" />
     <library name="tink_url" />
     <library name="HtmlParser" />
   </haxelib>
